@@ -1,0 +1,7 @@
+Flask
+Flask-SocketIO
+numpy
+tensorflow
+gunicorn
+gevent
+gevent-websocket
