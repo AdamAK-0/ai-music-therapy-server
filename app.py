@@ -126,7 +126,7 @@ def handle_start(data):
         client_emotions[sid] = (emotion_vector, emotion_label)
 
         seed_sequence = client_sequences[sid]
-        seed_sequence, notes_chunk = generate_chunk(seed_sequence, emotion_vector, chunk_size=8)
+        seed_sequence, notes_chunk = generate_chunk(seed_sequence, emotion_vector, chunk_size=4)
         client_sequences[sid] = seed_sequence
 
         print(f"[start_music] emitting new_notes={notes_chunk}")
@@ -155,7 +155,7 @@ def handle_request_more(data):
             emotion_vector, emotion_label = client_emotions[sid]
 
         seed_sequence = client_sequences[sid]
-        seed_sequence, notes_chunk = generate_chunk(seed_sequence, emotion_vector, chunk_size=8)
+        seed_sequence, notes_chunk = generate_chunk(seed_sequence, emotion_vector, chunk_size=4)
         client_sequences[sid] = seed_sequence
 
         print(f"[request_more] emitting new_notes={notes_chunk}")
