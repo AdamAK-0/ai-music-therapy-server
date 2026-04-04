@@ -2,17 +2,35 @@ from flask import Flask, request
 from flask_socketio import SocketIO, emit
 import numpy as np
 from tensorflow.keras.models import load_model
+import tensorflow as tf
 import os
 import traceback
+import time
+
+# Reduce TensorFlow thread usage on small hosted servers
+tf.config.threading.set_intra_op_parallelism_threads(1)
+tf.config.threading.set_inter_op_parallelism_threads(1)
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-key")
 
+# Use threading mode for hosted CPU-heavy inference
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 print("Loading model...")
 model = load_model("music_model_emotion.h5")
 print("Model loaded successfully.")
+
+# Warm up model once at startup
+try:
+    warmup_input = np.array([[60, 62, 64, 65, 67, 69, 71, 72, 0, 1, 0, 0]], dtype=np.float32)
+    warmup_start = time.time()
+    warmup_output = model(warmup_input, training=False).numpy()
+    warmup_end = time.time()
+    print(f"Warmup complete. Output shape={warmup_output.shape}. Took {warmup_end - warmup_start:.3f}s")
+except Exception as e:
+    print(f"Warmup failed: {e}")
+    traceback.print_exc()
 
 emotion_map = {
     "relax": [1, 0, 0, 0],
@@ -33,6 +51,7 @@ def detect_emotion(user_text):
         return emotion_map["focus"], "focus"
 
 def sample(predictions, temperature=1.0):
+    predictions = np.asarray(predictions, dtype=np.float64)
     predictions = np.log(predictions + 1e-9) / temperature
     exp_preds = np.exp(predictions)
     predictions = exp_preds / np.sum(exp_preds)
@@ -41,25 +60,34 @@ def sample(predictions, temperature=1.0):
 client_sequences = {}
 client_emotions = {}
 
-def generate_chunk(seed_seq, emotion_vector, chunk_size=8):
-    print(f"generate_chunk called with seed_seq={seed_seq}, emotion_vector={emotion_vector}")
+def run_inference(x_input):
+    start = time.time()
+    output = model(x_input, training=False).numpy()[0]
+    end = time.time()
+    print(f"[run_inference] finished in {end - start:.3f}s")
+    return output
+
+def generate_chunk(seed_seq, emotion_vector, chunk_size=4):
+    print(f"generate_chunk called with seed_seq={seed_seq}, emotion_vector={emotion_vector}, chunk_size={chunk_size}")
 
     pattern = list(seed_seq)
     generated_notes = []
 
     for i in range(chunk_size):
-        combined_input = pattern + emotion_vector
-        x_input = np.array(combined_input).reshape(1, len(combined_input))
+        x_input = np.array([pattern + emotion_vector], dtype=np.float32)
 
         print(f"[generate_chunk] iteration={i}")
         print(f"[generate_chunk] x_input.shape={x_input.shape}")
         print(f"[generate_chunk] x_input={x_input}")
 
-        prediction = model.predict(x_input, verbose=0)[0]
-
+        prediction = run_inference(x_input)
         print(f"[generate_chunk] raw prediction shape={prediction.shape}")
 
-        prediction = prediction / prediction.sum()
+        prediction_sum = prediction.sum()
+        if prediction_sum <= 0:
+            raise ValueError("Prediction sum is zero or negative.")
+
+        prediction = prediction / prediction_sum
 
         note_idx = sample(prediction)
         note_idx = int(max(21, min(108, note_idx)))
@@ -88,7 +116,6 @@ def handle_start(data):
     try:
         user_text = data.get("user_text", "")
         if not user_text:
-            print("[start_music] user_text missing")
             emit("error", {"message": "user_text is required"})
             return
 
@@ -99,14 +126,11 @@ def handle_start(data):
         client_emotions[sid] = (emotion_vector, emotion_label)
 
         seed_sequence = client_sequences[sid]
-        print(f"[start_music] initial seed_sequence={seed_sequence}")
-
-        seed_sequence, notes_chunk = generate_chunk(seed_sequence, emotion_vector)
+        seed_sequence, notes_chunk = generate_chunk(seed_sequence, emotion_vector, chunk_size=4)
         client_sequences[sid] = seed_sequence
 
         print(f"[start_music] emitting new_notes={notes_chunk}")
         emit("new_notes", {"notes": notes_chunk, "emotion": emotion_label})
-        print("[start_music] emit complete")
 
     except Exception as e:
         print(f"[start_music] ERROR: {e}")
@@ -120,7 +144,6 @@ def handle_request_more(data):
 
     try:
         if sid not in client_sequences:
-            print("[request_more] session not initialized")
             emit("error", {"message": "Session not initialized"})
             return
 
@@ -128,20 +151,15 @@ def handle_request_more(data):
         if user_text:
             emotion_vector, emotion_label = detect_emotion(user_text)
             client_emotions[sid] = (emotion_vector, emotion_label)
-            print(f"[request_more] updated emotion={emotion_label}")
         else:
             emotion_vector, emotion_label = client_emotions[sid]
-            print(f"[request_more] reusing emotion={emotion_label}")
 
         seed_sequence = client_sequences[sid]
-        print(f"[request_more] current seed_sequence={seed_sequence}")
-
-        seed_sequence, notes_chunk = generate_chunk(seed_sequence, emotion_vector)
+        seed_sequence, notes_chunk = generate_chunk(seed_sequence, emotion_vector, chunk_size=4)
         client_sequences[sid] = seed_sequence
 
         print(f"[request_more] emitting new_notes={notes_chunk}")
         emit("new_notes", {"notes": notes_chunk, "emotion": emotion_label})
-        print("[request_more] emit complete")
 
     except Exception as e:
         print(f"[request_more] ERROR: {e}")
