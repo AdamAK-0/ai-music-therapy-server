@@ -1,7 +1,6 @@
 Flask
 Flask-SocketIO
-numpy
-tensorflow
+numpy==1.26.4
+tensorflow==2.19.0
 gunicorn
-gevent
-gevent-websocket
+simple-websocket
