@@ -3,5 +3,3 @@ __pycache__/
 venv/
 .env
 .DS_Store
-maestro-v3.0.0
-*.midi
