@@ -287,7 +287,7 @@ def handle_start(data):
         )
         client_sequences[sid] = seed_sequence
 
-        emit("new_notes", {"notes": notes_chunk, "emotion": emotion_label})
+        emit("new_notes", {"notes": notes_chunk})
 
     except Exception as exc:
         print(f"[start_music] ERROR: {exc}")
@@ -316,7 +316,7 @@ def handle_request_more(data):
         )
         client_sequences[sid] = seed_sequence
 
-        emit("new_notes", {"notes": notes_chunk, "emotion": emotion_label})
+        emit("new_notes", {"notes": notes_chunk})
 
     except Exception as exc:
         print(f"[request_more] ERROR: {exc}")
