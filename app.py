@@ -18,7 +18,7 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 MIN_MIDI = 21
 MAX_MIDI = 108
 MODEL_SEED_SIZE = 8
-DEFAULT_CHUNK_SIZE = int(os.environ.get("MUSIC_CHUNK_SIZE", "16"))
+DEFAULT_CHUNK_SIZE = int(os.environ.get("MUSIC_CHUNK_SIZE", "8"))
 
 EMOTION_MAP = {
     "relax": [1, 0, 0, 0],
