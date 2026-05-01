@@ -4,3 +4,7 @@ venv/
 .env
 .DS_Store
 server.py
+maestro-v3.0.0/
+maestro-v3.0.0-midi.zip
+evaluation_artifacts/
+app_backup.py
